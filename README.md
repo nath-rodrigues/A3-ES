@@ -1,2 +1,2 @@
-# DespesaClara -- Analisador de Execução de Despesa por Orgão
+# Analisador de Execução de Despesa por Orgão
 
