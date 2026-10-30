@@ -1,2 +1,2 @@
-# DespesaClara -- Analisador de Execução de Despesa por Orgão - AT3-ES
+# DespesaClara -- Analisador de Execução de Despesa por Orgão
 
