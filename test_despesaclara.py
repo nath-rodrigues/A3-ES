@@ -1,7 +1,8 @@
 """
 Testes automatizados - DespesaClara (Sprint 2)
 
-Escolhidos historias 1, 2 e 4
+Sprint 2: historias 1, 2 e 4.
+Sprint 3: acrescentados testes das historias 3 e 5 e um teste do fluxo completo.
 
 Cada teste verifica UM critério de aceitação de uma história de usuário.
 Nome do teste:  test_hu<N>_ca<M>_<o_que_o_teste_confere>
@@ -249,3 +250,125 @@ def test_hu4_ca5_sem_permissao_pede_para_fechar_o_arquivo(
 
     assert "fech" in capsys.readouterr().out.lower()
 
+
+# ==========================================================================
+# HU3 - Processamento e Separação de Estágios da Despesa (Sprint 3)
+# ==========================================================================
+def test_hu3_ca1_soma_valores_por_orgao():
+    """HU3 CA1: os valores são somados agrupando por órgão."""
+    dados = _dados_exemplo() + [
+        _linha("26000", "Ministério da Educação", "50,00", "20,00", "10,00")
+    ]
+    resumo = dc.somar_por_orgao(dados)
+    assert len(resumo) == 3
+    assert resumo["Ministério da Educação"]["empenhado"] == Decimal("150.00")
+
+
+def test_hu3_ca2_estagios_ficam_separados():
+    """HU3 CA2: empenho, liquidação e pagamento não são misturados."""
+    resumo = dc.somar_por_orgao(_dados_exemplo())
+    saude = resumo["Ministério da Saúde"]
+    assert set(saude) == {"empenhado", "liquidado", "pago"}
+    assert saude["empenhado"] == Decimal("200.00")
+    assert saude["liquidado"] == Decimal("150.00")
+    assert saude["pago"] == Decimal("120.00")
+
+
+def test_hu3_ca3_converte_valor_no_padrao_brasileiro():
+    """HU3 CA3: '1.234.567,89' vira número antes da soma."""
+    assert dc.converter_valor("1.234.567,89") == Decimal("1234567.89")
+
+
+def test_hu3_ca4_campo_vazio_vira_zero():
+    """HU3 CA4: campo vazio ou nulo conta como 0.00."""
+    assert dc.converter_valor("") == Decimal("0.00")
+    assert dc.converter_valor(None) == Decimal("0.00")
+    dados = [_linha("26000", "Ministério da Educação", "", "10,00", "")]
+    resumo = dc.somar_por_orgao(dados)
+    assert resumo["Ministério da Educação"]["empenhado"] == Decimal("0.00")
+
+
+def test_hu3_ca5_mantem_duas_casas_decimais():
+    """HU3 CA5: o resultado da soma tem sempre duas casas decimais."""
+    dados = [
+        _linha("26000", "Ministério da Educação", "0,10", "0,20", "1"),
+        _linha("26000", "Ministério da Educação", "0,20", "0,10", "2"),
+    ]
+    total = dc.somar_por_orgao(dados)["Ministério da Educação"]
+    assert total["empenhado"] == Decimal("0.30")
+    assert total["empenhado"].as_tuple().exponent == -2
+    assert total["pago"].as_tuple().exponent == -2
+
+
+# ==========================================================================
+# HU5 - Resumo Analítico no Terminal (Sprint 3)
+# ==========================================================================
+def test_hu5_ca1_imprime_resultado_de_cada_orgao(capsys):
+    """HU5 CA1: o resumo de cada órgão aparece no terminal."""
+    dc.imprimir_resumo(_resumo_exemplo())
+    texto = capsys.readouterr().out
+    assert "Ministério da Educação" in texto
+    assert "Ministério da Saúde" in texto
+
+
+def test_hu5_ca2_tres_estagios_lado_a_lado(capsys):
+    """HU5 CA2: os três estágios aparecem como colunas da mesma linha."""
+    dc.imprimir_resumo(_resumo_exemplo())
+    linhas = capsys.readouterr().out.splitlines()
+    assert "Empenhado" in linhas[0]
+    assert "Liquidado" in linhas[0]
+    assert "Pago" in linhas[0]
+    linha_saude = next(l for l in linhas if "Saúde" in l)
+    assert "R$ 2.000,00" in linha_saude
+    assert "R$ 1.500,00" in linha_saude
+    assert "R$ 1.000,25" in linha_saude
+
+
+def test_hu5_ca3_formata_como_moeda_brasileira():
+    """HU5 CA3: 1500250.00 aparece como 'R$ 1.500.250,00'."""
+    assert dc.formatar_moeda(Decimal("1500250.00")) == "R$ 1.500.250,00"
+
+
+def test_hu5_ca4_mostra_linha_com_total_geral(capsys):
+    """HU5 CA4: a última linha traz a soma de todos os órgãos."""
+    dc.imprimir_resumo(_resumo_exemplo())
+    ultima = capsys.readouterr().out.strip().splitlines()[-1]
+    assert "TOTAL" in ultima
+    assert "R$ 1.502.250,00" in ultima  # empenhado: 1500250 + 2000
+
+
+def test_hu5_ca5_abrevia_nome_de_orgao_muito_longo(capsys):
+    """HU5 CA5: nomes com mais de 50 caracteres são abreviados."""
+    nome_longo = "Ministério " + "da Coisa Muito Comprida " * 5
+    resumo = {nome_longo: _resumo_exemplo()["Ministério da Saúde"]}
+    dc.imprimir_resumo(resumo)
+    assert len(dc.abreviar_nome(nome_longo)) == 50
+    linhas = capsys.readouterr().out.splitlines()
+    assert len(linhas[2]) == len(linhas[0])  # a tabela não quebrou
+
+
+# ==========================================================================
+# Fluxo completo (Sprint 3)
+# ==========================================================================
+def test_fluxo_completo_do_csv_ao_relatorio(tmp_path, monkeypatch, capsys):
+    """Do arquivo CSV ao relatório e ao resumo no terminal."""
+    colunas = ["Código Órgão Superior"] + COLUNAS_OBRIGATORIAS
+    linhas = [
+        ["26000", "Ministério da Educação", "1.000,50", "800,00", "500,00"],
+        ["26000", "Ministério da Educação", "", "100,00", "100,25"],
+        ["36000", "Ministério da Saúde", "200,00", "150,00", "120,00"],
+    ]
+    entrada = _criar_csv(tmp_path / "dados.csv", colunas, linhas)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda *_: "26000")
+
+    assert dc.main([entrada]) == 0
+
+    relatorios = list(tmp_path.glob("relatorio_*.csv"))
+    assert len(relatorios) == 1
+    with open(relatorios[0], newline="", encoding="utf-8-sig") as arquivo:
+        linhas_saida = list(csv.reader(arquivo, delimiter=";"))
+    assert linhas_saida[1] == [
+        "Ministério da Educação", "1000,50", "900,00", "600,25"
+    ]
+    assert "R$ 1.000,50" in capsys.readouterr().out
