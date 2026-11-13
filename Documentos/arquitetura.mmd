@@ -1,0 +1,26 @@
+flowchart LR
+    U([Usuário]) -->|caminho do CSV e órgãos| E
+
+    subgraph DespesaClara["despesaclara.py"]
+        E["1. Entrada<br/>pegar_caminho<br/>pedir_orgaos"]
+        V["2. Validação<br/>validar_arquivo"]
+        L["3. Leitura<br/>ler_dados"]
+        F["4. Filtro<br/>filtrar_orgaos"]
+        P["5. Processamento<br/>converter_valor<br/>somar_por_orgao"]
+        S["6. Saída<br/>salvar_relatorio<br/>imprimir_resumo"]
+        M{{"main()<br/>coordena o fluxo"}}
+    end
+
+    E -->|caminho| V
+    V -->|arquivo válido| L
+    L -->|linhas do CSV| F
+    F -->|linhas dos órgãos| P
+    P -->|resumo por órgão| S
+
+    CSVin[("CSV do Portal<br/>da Transparência")] -.->|lido por| V
+    CSVin -.->|lido por| L
+    S -->|grava| CSVout[("relatorio_AAAAMMDD.csv")]
+    S -->|imprime tabela| T([Terminal])
+
+    M -.- E
+    M -.- S
